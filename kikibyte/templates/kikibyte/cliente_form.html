@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KikiByte - Novo Cliente</title>
+    <style>
+        :root {
+            --bg: #f6f2ee;
+            --surface: #ffffff;
+            --surface-soft: #f4e8df;
+            --text: #2e241b;
+            --text-muted: #766456;
+            --primary: #793A14;
+            --border: rgba(121,58,20,0.12);
+            --radius: 24px;
+        }
+        * { box-sizing: border-box; }
+        body { margin: 0; font-family: 'Segoe UI', Roboto, Arial, sans-serif; background: var(--bg); color: var(--text); }
+        .page { max-width: 980px; margin: 0 auto; padding: 32px 24px; }
+        .page-header { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 16px; align-items: center; margin-bottom: 28px; }
+        .page-header h1 { margin: 0; font-size: 2rem; }
+        .page-header p { margin: 6px 0 0; color: var(--text-muted); }
+        .panel { background: var(--surface); border-radius: var(--radius); padding: 28px; box-shadow: 0 24px 60px rgba(0,0,0,0.08); border: 1px solid rgba(121,58,20,0.08); }
+        .form-grid { display: grid; gap: 18px; }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+        label { display: block; font-weight: 700; margin-bottom: 8px; }
+        input, textarea, select { width: 100%; padding: 14px 16px; border-radius: 16px; border: 1px solid var(--border); background: #fff; color: var(--text); font-size: 1rem; }
+        textarea { min-height: 140px; resize: vertical; }
+        .actions { display: flex; gap: 12px; flex-wrap: wrap; margin-top: 12px; }
+        .btn { display: inline-flex; align-items: center; justify-content: center; padding: 14px 22px; border-radius: 999px; font-weight: 700; border: none; cursor: pointer; }
+        .btn-primary { background: var(--primary); color: #fff; }
+        .btn-secondary { background: #fff; color: var(--text); border: 1px solid var(--border); }
+        .alert { border-radius: 18px; padding: 16px 20px; margin-bottom: 20px; }
+        .alert-success { background: #def7e1; color: #175f24; border: 1px solid #a3d7a3; }
+        .alert-error { background: #ffe4e4; color: #9d2121; border: 1px solid #f0b8b8; }
+        @media (max-width: 720px) { .form-row { grid-template-columns: 1fr; } }
+    </style>
+</head>
+<body>
+    <div class="page">
+        <div class="page-header">
+            <div>
+                <h1>Novo Cliente</h1>
+                <p>Adicione um cliente para começar a gerir a base.</p>
+            </div>
+            <a href="{% url 'kikibyte:dashboard' %}?tab=clientes" class="btn btn-secondary">Voltar para Clientes</a>
+        </div>
+
+        {% if messages %}
+        <div class="alert-bar">
+            {% for message in messages %}
+            <div class="alert alert-{{ message.tags }}">{{ message }}</div>
+            {% endfor %}
+        </div>
+        {% endif %}
+
+        <div class="panel">
+            <form method="post" class="form-grid">
+                {% csrf_token %}
+                <div class="form-row">
+                    <label for="nome">Nome da Empresa</label>
+                    <input id="nome" name="nome" type="text" placeholder="TechCorp Portugal SA" value="{{ cliente.nome|default:'' }}" required>
+                    <label for="nif">NIF</label>
+                    <input id="nif" name="nif" type="text" placeholder="500123456" value="{{ cliente.nif|default:'' }}">
+                </div>
+
+                <div class="form-row">
+                    <label for="email">Email</label>
+                    <input id="email" name="email" type="email" placeholder="geral@techcorp.pt" value="{{ cliente.email|default:'' }}">
+                    <label for="telefone">Telefone</label>
+                    <input id="telefone" name="telefone" type="text" placeholder="+351 222 100 200" value="{{ cliente.telefone|default:'' }}">
+                </div>
+
+                <div class="form-row">
+                    <label for="setor">Setor</label>
+                    <input id="setor" name="setor" type="text" placeholder="Tecnologia" value="{{ cliente.setor|default:'' }}">
+                    <label for="morada">Morada</label>
+                    <input id="morada" name="morada" type="text" placeholder="Rua Exemplo 123" value="{{ cliente.morada|default:'' }}">
+                </div>
+
+                <div class="actions">
+                    <button type="submit" class="btn btn-primary">{% if cliente %}Atualizar Cliente{% else %}Criar Cliente{% endif %}</button>
+                    <a href="{% url 'kikibyte:dashboard' %}?tab=clientes" class="btn btn-secondary">Cancelar</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>

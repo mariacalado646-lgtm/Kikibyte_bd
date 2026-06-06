@@ -56,10 +56,10 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
         'NAME': 'projeto2',       # nome da base de dados
-        'USER': 'postegres',       # utilizador
+        'USER': 'projeto',       # utilizador
         'PASSWORD': 'projeto123',   # password
         'HOST': '100.105.58.22',       # ex: db.render.com ou localhost
-        'PORT': '5432',
+        'PORT': '5434',
         # Se o teu servidor remoto precisar de SSL (Render, Supabase, Neon):
         # 'OPTIONS': {'sslmode': 'require'},
     }

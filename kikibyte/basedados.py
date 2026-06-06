@@ -377,6 +377,16 @@ def mensagem_ler_por_pedido(pedido_id, incluir_internas=False):
         base += " AND m.visivel_cliente=TRUE"
     return _query(base + " ORDER BY m.created_at ASC", [pedido_id], fetchall=True)
 
+def mensagem_ler_todas():
+    sql = """
+        SELECT m.*, p.titulo AS pedido_titulo, u.nome AS remetente_nome
+        FROM mensagem m
+        LEFT JOIN pedido p ON m.pedido_id = p.id_pedido
+        LEFT JOIN utilizador u ON m.remetente_id = u.id_utilizador
+        ORDER BY m.created_at DESC
+    """
+    return _query(sql, fetchall=True)
+
 def mensagem_eliminar(id_mensagem):
     return _query("DELETE FROM mensagem WHERE id_mensagem=%s", [id_mensagem])
 
@@ -401,6 +411,16 @@ def documento_ler_por_cliente(cliente_id, visivel_cliente=None):
     if visivel_cliente is not None:
         base += f" AND visivel_cliente={'TRUE' if visivel_cliente else 'FALSE'}"
     return _query(base + " ORDER BY created_at DESC", [cliente_id], fetchall=True)
+
+def documento_ler_todos():
+    sql = """
+        SELECT d.*, c.nome AS cliente_nome, p.titulo AS pedido_titulo
+        FROM documento d
+        LEFT JOIN cliente c ON d.cliente_id = c.id_cliente
+        LEFT JOIN pedido p ON d.pedido_id = p.id_pedido
+        ORDER BY d.created_at DESC
+    """
+    return _query(sql, fetchall=True)
 
 def documento_ler_por_id(id_documento):
     return _query(
@@ -490,3 +510,116 @@ def log_ler_todos(limite=100):
         LIMIT %s
     """
     return _query(sql, [limite], fetchall=True)
+
+# ── QUERIES DE DASHBOARD / RELATÓRIOS ────────────────────────────────────────
+
+def dash_clientes_por_conformidade():
+    """
+    Requisito 1 — Número de clientes por estado NIS2.
+    Devolve: [{'estado_conformidade': '...', 'total': N}, ...]
+    """
+    sql = """
+        SELECT
+            estado_conformidade,
+            COUNT(*) AS total
+        FROM cliente
+        WHERE ativo = TRUE
+        GROUP BY estado_conformidade
+        ORDER BY total DESC
+    """
+    return _query(sql, fetchall=True)
+
+
+def dash_top5_clientes_incidentes():
+    """
+    Requisito 2 — Top 5 clientes com mais incidentes de segurança.
+    Devolve: [{'cliente_nome': '...', 'total_incidentes': N}, ...]
+    """
+    sql = """
+        SELECT
+            c.nome AS cliente_nome,
+            COUNT(p.id_pedido) AS total_incidentes
+        FROM pedido p
+        JOIN cliente c ON p.cliente_id = c.id_cliente
+        WHERE p.tipo = 'incidente'
+        GROUP BY c.id_cliente, c.nome
+        ORDER BY total_incidentes DESC
+        LIMIT 5
+    """
+    return _query(sql, fetchall=True)
+
+
+def dash_documentos_por_cliente_mes(ano=None):
+    """
+    Requisito 3 — Total de documentos submetidos por cliente e por mês.
+    Devolve: [{'cliente_nome': '...', 'mes': '2026-01', 'total': N}, ...]
+    """
+    filtro = "WHERE EXTRACT(YEAR FROM d.created_at) = %s" if ano else ""
+    params = [ano] if ano else []
+    sql = f"""
+        SELECT
+            c.nome AS cliente_nome,
+            TO_CHAR(d.created_at, 'YYYY-MM') AS mes,
+            COUNT(d.id_documento) AS total
+        FROM documento d
+        JOIN cliente c ON d.cliente_id = c.id_cliente
+        {filtro}
+        GROUP BY c.id_cliente, c.nome, TO_CHAR(d.created_at, 'YYYY-MM')
+        ORDER BY mes DESC, total DESC
+    """
+    return _query(sql, params, fetchall=True)
+
+
+def dash_utilizadores_por_perfil():
+    """
+    Requisito 4 — Distribuição de utilizadores por perfil.
+    Devolve: [{'perfil': 'administrador', 'total': N}, ...]
+    """
+    sql = """
+        SELECT
+            r.nome AS perfil,
+            COUNT(u.id_utilizador) AS total
+        FROM utilizador u
+        JOIN role r ON u.role_id = r.id_role
+        WHERE u.ativo = TRUE
+        GROUP BY r.id_role, r.nome
+        ORDER BY total DESC
+    """
+    return _query(sql, fetchall=True)
+
+
+def dash_pedidos_estado_e_tempo_medio():
+    """
+    Requisito 5 — Estado dos pedidos e tempo médio de resolução (em horas).
+    Devolve lista por estado + média geral de resolução dos pedidos fechados.
+    """
+    sql_estados = """
+        SELECT
+            estado,
+            tipo,
+            COUNT(*) AS total
+        FROM pedido
+        GROUP BY estado, tipo
+        ORDER BY estado, tipo
+    """
+
+    sql_tempo_medio = """
+        SELECT
+            tipo,
+            ROUND(
+                AVG(
+                    EXTRACT(EPOCH FROM (data_fecho - data_criacao)) / 3600
+                )::NUMERIC, 2
+            ) AS horas_media,
+            COUNT(*) AS total_resolvidos
+        FROM pedido
+        WHERE estado IN ('concluido', 'cancelado')
+          AND data_fecho IS NOT NULL
+        GROUP BY tipo
+        ORDER BY tipo
+    """
+
+    return {
+        'por_estado': _query(sql_estados, fetchall=True),
+        'tempo_medio': _query(sql_tempo_medio, fetchall=True),
+    }

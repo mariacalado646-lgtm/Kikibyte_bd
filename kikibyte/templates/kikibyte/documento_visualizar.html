@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Visualizar Documento</title>
+    <style>
+        body { margin: 0; font-family: 'Segoe UI', Arial, sans-serif; background: #f6f2ee; color: #2e241b; }
+        .page { max-width: 840px; margin: 40px auto; padding: 28px; background: #fff; border-radius: 28px; box-shadow: 0 20px 40px rgba(0,0,0,0.06); }
+        h1 { margin-top: 0; }
+        .metadata { display: grid; gap: 10px; margin: 20px 0; }
+        .metadata span { display: block; color: #766456; }
+        .actions { display: flex; gap: 14px; flex-wrap: wrap; margin-top: 20px; }
+        .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 14px 22px; border-radius: 16px; text-decoration: none; color: #fff; font-weight: 700; }
+        .btn-primary { background: #793A14; }
+        .btn-secondary { background: #f4e8df; color: #2e241b; border: 1px solid rgba(121,58,20,0.18); }
+    </style>
+</head>
+<body>
+    <main class="page">
+        <h1>{{ documento.titulo }}</h1>
+        <div class="metadata">
+            <span>Tipo: {{ documento.tipo_documento }}</span>
+            <span>Cliente: {{ documento.cliente_nome|default:'Cliente Desconhecido' }}</span>
+            <span>Data: {{ documento.created_at }}</span>
+            <span>Visível ao cliente: {{ documento.visivel_cliente|yesno:'Sim,Não' }}</span>
+        </div>
+        <p>Este é o visualizador de documento. Pode descarregar ou voltar para a lista de documentos.</p>
+        <div class="actions">
+            <a href="{% url 'kikibyte:documento_download' documento.id_documento %}" class="btn btn-primary">Descarregar</a>
+            <a href="{% url 'kikibyte:dashboard' %}?tab=documentos" class="btn btn-secondary">Voltar para Documentos</a>
+        </div>
+    </main>
+</body>
+</html>

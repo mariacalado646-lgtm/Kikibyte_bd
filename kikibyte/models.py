@@ -52,6 +52,15 @@ class Cliente(models.Model):
     morada      = models.TextField(null=True, blank=True)
     foto_base64 = models.TextField(null=True, blank=True)
     ativo       = models.BooleanField(default=True)
+    CONFORMIDADE = [
+        ('conforme',       'Conforme'),
+        ('em_avaliacao',   'Em Avaliação'),
+        ('com_pendencias', 'Com Pendências'),
+    ]
+    estado_conformidade = models.CharField(
+        max_length=30,
+        choices=CONFORMIDADE,
+        default='em_avaliacao')
     created_at  = models.DateTimeField(auto_now_add=True)
     updated_at  = models.DateTimeField(auto_now=True)
 
@@ -215,18 +224,23 @@ class Pedido(models.Model):
     descricao    = models.TextField(null=True, blank=True)
     estado       = models.CharField(max_length=30, choices=ESTADO, default='pendente')
     prioridade   = models.CharField(max_length=20, choices=PRIORIDADE, default='normal')
+    TIPO = [
+        ('pedido',       'Pedido'),
+        ('incidente',    'Incidente de Segurança'),
+        ('auditoria',    'Auditoria'),
+        ('consultoria',  'Consultoria'),
+    ]
+    tipo         = models.CharField(max_length=30, choices=TIPO, default='pedido')
     anexo_base64 = models.TextField(null=True, blank=True)
     data_criacao = models.DateTimeField(auto_now_add=True)
-    data_fecho   = models.DateTimeField(null=True, blank=True)
+    data_fecho = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         db_table = 'pedido'
-        managed  = False
+        managed = False
 
     def __str__(self):
         return self.titulo
-
-
 class Mensagem(models.Model):
     id_mensagem     = models.BigAutoField(primary_key=True)
     pedido          = models.ForeignKey(Pedido, on_delete=models.CASCADE, db_column='pedido_id')

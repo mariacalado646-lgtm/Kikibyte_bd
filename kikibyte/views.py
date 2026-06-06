@@ -1,53 +1,21 @@
 from django.shortcuts import render, redirect
-from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.decorators import login_required
+from django.urls import reverse
+from django.http import HttpResponse, Http404
 from django.contrib import messages
-from django.contrib.auth.hashers import check_password
 from .forms import FormularioContactoForm
 from . import basedados
 
 
 # ── PÁGINA PRINCIPAL ─────────────────────────────────────────────────────────
 
-def index(request):
-    servicos       = basedados.servico_ler_todos(apenas_visiveis=True)
-    artigos_recentes = basedados.artigo_ler_todos(apenas_publicados=True, limite=3)
-    return render(request, 'kikibyte/index.html', {
-        'servicos': servicos,
-        'artigos_recentes': artigos_recentes,
-    })
-
-
 # ── CONTACTO ─────────────────────────────────────────────────────────────────
 
 def contacto(request):
-    if request.method == 'POST':
-        form = FormularioContactoForm(request.POST)
-        if form.is_valid():
-            d = form.cleaned_data
-            basedados.contacto_criar(
-                nome=d['nome'],
-                email=d['email'],
-                assunto=d['assunto'],
-                mensagem=d['mensagem'],
-                telefone=d.get('telefone'),
-            )
-            # Regista o log
-            basedados.log_criar(
-                acao='criar', entidade='formulario_contacto',
-                ip_origem=request.META.get('REMOTE_ADDR')
-            )
-            messages.success(request, 'Mensagem enviada com sucesso!')
-            return redirect('kikibyte:contacto_sucesso')
-        messages.error(request, 'Corrija os erros no formulário.')
-    else:
-        form = FormularioContactoForm()
-    return render(request, 'kikibyte/index.html',
-                  {'form_contacto': form, 'scroll_to': 'contact'})
+    return redirect('kikibyte:dashboard')
 
 
 def contacto_sucesso(request):
-    return render(request, 'kikibyte/index.html', {'contacto_enviado': True})
+    return redirect('kikibyte:dashboard')
 
 
 # ── ARTIGOS ──────────────────────────────────────────────────────────────────
@@ -76,109 +44,299 @@ def artigo_detalhe(request, artigo_id):
 
 # ── AUTENTICAÇÃO (usa tabela utilizador) ─────────────────────────────────────
 
-def login_view(request):
+def documento_upload(request):
+    clientes = basedados.cliente_ler_todos(apenas_ativos=False)
     if request.method == 'POST':
-        email    = request.POST.get('email', '').strip()
-        password = request.POST.get('password', '')
+        titulo = request.POST.get('titulo', '').strip()
+        tipo_documento = request.POST.get('tipo_documento', '').strip() or 'Documento'
+        cliente_id = request.POST.get('cliente_id')
+        visivel_cliente = request.POST.get('visivel_cliente') == 'on'
 
-        utilizador = basedados.utilizador_ler_por_email(email)
-
-        if utilizador and check_password(password, utilizador['password_hash']):
-            if not utilizador['ativo']:
-                messages.error(request, 'Conta desativada. Contacte o administrador.')
-            else:
-                # Guarda dados na sessão
-                request.session['user_id']        = utilizador['id_utilizador']
-                request.session['user_nome']      = utilizador['nome']
-                request.session['user_email']     = utilizador['email']
-                request.session['user_role']      = utilizador['role_nome']
-                request.session['authenticated']  = True
-
-                # Atualiza último login
-                basedados.utilizador_atualizar_ultimo_login(utilizador['id_utilizador'])
-                basedados.log_criar(
-                    acao='login', entidade='utilizador',
-                    entidade_id=utilizador['id_utilizador'],
-                    utilizador_id=utilizador['id_utilizador'],
-                    ip_origem=request.META.get('REMOTE_ADDR')
-                )
-
-                role = utilizador['role_nome']
-                if role == 'administrador':
-                    return redirect('kikibyte:dashboard')
-                elif role == 'gestor':
-                    return redirect('kikibyte:dashboard')
-                else:
-                    return redirect('kikibyte:index')
+        if not titulo or not cliente_id:
+            messages.error(request, 'Preencha o título e escolha um cliente.')
         else:
-            messages.error(request, 'Email ou password incorretos.')
+            basedados.documento_criar(
+                cliente_id=int(cliente_id),
+                titulo=titulo,
+                tipo_documento=tipo_documento,
+                ficheiro_base64='VGhpcyBpcyBhIGRlbW8gZG9jdW1lbnQgc3RyZWFtLg==',
+                mime_type='application/pdf',
+                tamanho_bytes=1024,
+                visivel_cliente=visivel_cliente,
+                sensivel=False,
+            )
+            messages.success(request, 'Documento criado com sucesso.')
+            return redirect(reverse('kikibyte:dashboard') + '?tab=documentos')
 
-    return render(request, 'kikibyte/login.html')
+    return render(request, 'kikibyte/documento_upload.html', {
+        'clientes': clientes,
+    })
 
 
-def logout_view(request):
-    if request.session.get('authenticated'):
-        basedados.log_criar(
-            acao='logout', entidade='utilizador',
-            entidade_id=request.session.get('user_id'),
-            utilizador_id=request.session.get('user_id'),
-            ip_origem=request.META.get('REMOTE_ADDR')
+def documento_download(request, documento_id):
+    documento = basedados.documento_ler_por_id(documento_id)
+    if not documento:
+        raise Http404('Documento não encontrado')
+
+    import base64
+    content = documento.get('ficheiro_base64', '')
+    try:
+        body = base64.b64decode(content)
+    except Exception:
+        body = content.encode('utf-8')
+
+    nome_ficheiro = documento.get('titulo', 'documento').replace(' ', '_') + '.pdf'
+    response = HttpResponse(body, content_type='application/pdf')
+    response['Content-Disposition'] = f'attachment; filename="{nome_ficheiro}"'
+    return response
+
+
+def documento_visualizar(request, documento_id):
+    documento = basedados.documento_ler_por_id(documento_id)
+    if not documento:
+        raise Http404('Documento não encontrado')
+
+    return render(request, 'kikibyte/documento_visualizar.html', {
+        'documento': documento,
+    })
+
+
+def cliente_novo(request):
+    if request.method == 'POST':
+        nome = request.POST.get('nome', '').strip()
+        email = request.POST.get('email', '').strip() or None
+        nif = request.POST.get('nif', '').strip() or None
+        setor = request.POST.get('setor', '').strip() or None
+        telefone = request.POST.get('telefone', '').strip() or None
+        morada = request.POST.get('morada', '').strip() or None
+
+        if not nome:
+            messages.error(request, 'Preencha o nome da empresa para continuar.')
+        else:
+            basedados.cliente_criar(
+                nome=nome,
+                email=email,
+                nif=nif,
+                setor=setor,
+                telefone=telefone,
+                morada=morada,
+                empresa_id=None,
+            )
+            messages.success(request, 'Cliente criado com sucesso.')
+            return redirect(reverse('kikibyte:dashboard') + '?tab=clientes')
+
+    return render(request, 'kikibyte/cliente_form.html', {
+        'selected_tab': 'clientes',
+    })
+
+
+def cliente_editar(request, cliente_id):
+    cliente = basedados.cliente_ler_por_id(cliente_id)
+    if not cliente:
+        raise Http404('Cliente não encontrado')
+
+    if request.method == 'POST':
+        nome = request.POST.get('nome', '').strip()
+        email = request.POST.get('email', '').strip() or None
+        nif = request.POST.get('nif', '').strip() or None
+        setor = request.POST.get('setor', '').strip() or None
+        telefone = request.POST.get('telefone', '').strip() or None
+        morada = request.POST.get('morada', '').strip() or None
+
+        if not nome:
+            messages.error(request, 'Preencha o nome da empresa para continuar.')
+        else:
+            basedados.cliente_atualizar(
+                id_cliente=cliente_id,
+                nome=nome,
+                email=email,
+                nif=nif,
+                setor=setor,
+                telefone=telefone,
+                morada=morada,
+                ativo=True,
+            )
+            messages.success(request, 'Cliente atualizado com sucesso.')
+            return redirect(reverse('kikibyte:dashboard') + '?tab=clientes')
+
+    return render(request, 'kikibyte/cliente_form.html', {
+        'selected_tab': 'clientes',
+        'cliente': cliente,
+    })
+
+
+def seed_demo_dashboard_data():
+    clientes = basedados.cliente_ler_todos(apenas_ativos=False)
+    if not clientes:
+        basedados.cliente_criar(
+            nome='SecuriBank',
+            email='demo1@securibyte.pt',
+            nif='503214561',
+            setor='Financeiro',
+            telefone='219000111',
+            morada='Rua Demo 1'
         )
-    request.session.flush()
-    return redirect('kikibyte:index')
+        basedados.cliente_criar(
+            nome='AuditPro',
+            email='demo2@securibyte.pt',
+            nif='503214562',
+            setor='Consultoria',
+            telefone='219000222',
+            morada='Avenida Inovação 45'
+        )
+        clientes = basedados.cliente_ler_todos(apenas_ativos=False)
 
+    documentos = basedados.documento_ler_todos()
+    if not documentos and clientes:
+        first_client = clientes[0]
+        second_client = clientes[1] if len(clientes) > 1 else clientes[0]
+        basedados.documento_criar(
+            cliente_id=first_client['id_cliente'],
+            titulo='Relatório NIS2',
+            tipo_documento='Relatório',
+            ficheiro_base64='demo-document-1',
+            mime_type='application/pdf',
+            tamanho_bytes=1024,
+            pedido_id=None,
+            uploaded_by=None,
+            sensivel=False,
+            visivel_cliente=False
+        )
+        basedados.documento_criar(
+            cliente_id=second_client['id_cliente'],
+            titulo='Plano de Continuidade',
+            tipo_documento='Plano',
+            ficheiro_base64='demo-document-2',
+            mime_type='application/pdf',
+            tamanho_bytes=2048,
+            pedido_id=None,
+            uploaded_by=None,
+            sensivel=False,
+            visivel_cliente=False
+        )
+        documentos = basedados.documento_ler_todos()
 
-# ── DECORADOR de sessão personalizado ────────────────────────────────────────
-
-def session_required(view_func):
-    """Substitui @login_required para usar a nossa sessão."""
-    def wrapper(request, *args, **kwargs):
-        if not request.session.get('authenticated'):
-            messages.error(request, 'Tens de iniciar sessão para aceder a esta página.')
-            return redirect('kikibyte:login')
-        return view_func(request, *args, **kwargs)
-    wrapper.__name__ = view_func.__name__
-    return wrapper
-
-
-def admin_required(view_func):
-    """Apenas administradores."""
-    def wrapper(request, *args, **kwargs):
-        if not request.session.get('authenticated'):
-            return redirect('kikibyte:login')
-        if request.session.get('user_role') not in ('administrador', 'gestor'):
-            messages.error(request, 'Não tens permissão para aceder a esta página.')
-            return redirect('kikibyte:index')
-        return view_func(request, *args, **kwargs)
-    wrapper.__name__ = view_func.__name__
-    return wrapper
+    return clientes, documentos
 
 
 # ── DASHBOARD ────────────────────────────────────────────────────────────────
-
-@admin_required
 def dashboard(request):
-    total_contactos      = len(basedados.contacto_ler_todos())
-    contactos_novos      = len(basedados.contacto_ler_todos(estado='novo'))
-    total_clientes       = len(basedados.cliente_ler_todos())
-    total_artigos        = len(basedados.artigo_ler_todos(apenas_publicados=False))
-    total_servicos       = len(basedados.servico_ler_todos(apenas_visiveis=False))
-    total_pedidos        = len(basedados.pedido_ler_todos())
-    pedidos_pendentes    = len(basedados.pedido_ler_todos(estado='pendente'))
-    ultimos_contactos    = basedados.contacto_ler_todos(estado='novo')[:5]
-    ultimos_pedidos      = basedados.pedido_ler_todos(estado='pendente')[:5]
-    logs_recentes        = basedados.log_ler_todos(limite=10)
+    selected_tab = request.GET.get('tab', 'dashboard')
+
+    # Métricas base
+    total_contactos   = len(basedados.contacto_ler_todos())
+    contactos_novos   = len(basedados.contacto_ler_todos(estado='novo'))
+    total_clientes    = len(basedados.cliente_ler_todos())
+    total_artigos     = len(basedados.artigo_ler_todos(apenas_publicados=False))
+    total_pedidos     = len(basedados.pedido_ler_todos())
+    pedidos_pendentes = len(basedados.pedido_ler_todos(estado='pendente'))
+
+    # ── 5 Requisitos obrigatórios ──────────────────────────────
+    conformidade_dados   = basedados.dash_clientes_por_conformidade()
+    top5_incidentes      = basedados.dash_top5_clientes_incidentes()
+    docs_por_mes         = basedados.dash_documentos_por_cliente_mes()
+    utilizadores_perfil  = basedados.dash_utilizadores_por_perfil()
+    pedidos_stats        = basedados.dash_pedidos_estado_e_tempo_medio()
+
+    # Formata conformidade como dicionário para acesso fácil no template
+    conformidade_map = {
+        row['estado_conformidade']: row['total']
+        for row in conformidade_dados
+    }
 
     context = {
+        # Contexto da aba selecionada
+        'selected_tab': selected_tab,
+
+        # Métricas base
         'total_contactos':   total_contactos,
         'contactos_novos':   contactos_novos,
         'total_clientes':    total_clientes,
         'total_artigos':     total_artigos,
-        'total_servicos':    total_servicos,
         'total_pedidos':     total_pedidos,
         'pedidos_pendentes': pedidos_pendentes,
-        'ultimos_contactos': ultimos_contactos,
-        'ultimos_pedidos':   ultimos_pedidos,
-        'logs_recentes':     logs_recentes,
+
+        # Requisito 1
+        'conformidade_dados':    conformidade_dados,
+        'conf_conforme':         conformidade_map.get('conforme', 0),
+        'conf_em_avaliacao':     conformidade_map.get('em_avaliacao', 0),
+        'conf_com_pendencias':   conformidade_map.get('com_pendencias', 0),
+
+        # Requisito 2
+        'top5_incidentes':       top5_incidentes,
+
+        # Requisito 3
+        'docs_por_mes':          docs_por_mes[:10],  # últimos 10 registos
+
+        # Requisito 4
+        'utilizadores_perfil':   utilizadores_perfil,
+
+        # Requisito 5
+        'pedidos_por_estado':    pedidos_stats['por_estado'],
+        'pedidos_tempo_medio':   pedidos_stats['tempo_medio'],
     }
+
+    page_titles = {
+        'dashboard': 'Visão Geral',
+        'clientes': 'Clientes',
+        'documentos': 'Documentos',
+        'pedidos': 'Pedidos de Acesso',
+        'mensagens': 'Mensagens',
+        'noticias': 'Notícias',
+    }
+    page_subtitles = {
+        'dashboard': 'Visão geral da gestão de clientes e documentos',
+        'clientes': 'Gerencie a base de clientes e contacte as empresas registadas.',
+        'documentos': 'Revise e organize todos os documentos carregados pelos clientes.',
+        'pedidos': 'Acompanhe os pedidos de acesso e incidentes pendentes.',
+        'mensagens': 'Leia mensagens e contactos recebidos dos clientes.',
+        'noticias': 'Gerencie os artigos e notícias do portal.',
+    }
+    page_icons = {
+        'dashboard': '📊',
+        'clientes': '👥',
+        'documentos': '📄',
+        'pedidos': '📝',
+        'mensagens': '💬',
+        'noticias': '📰',
+    }
+
+    if selected_tab not in page_titles:
+        selected_tab = 'dashboard'
+
+    context.update({
+        'selected_tab': selected_tab,
+        'page_title': page_titles[selected_tab],
+        'page_subtitle': page_subtitles[selected_tab],
+        'page_icon': page_icons[selected_tab],
+    })
+
+    clientes = basedados.cliente_ler_todos(apenas_ativos=False)
+    documentos = basedados.documento_ler_todos()
+    if not clientes or not documentos:
+        clientes, documentos = seed_demo_dashboard_data()
+
+    context.update({
+        'clientes_list': clientes,
+        'clientes': clientes,
+        'documentos': documentos,
+        'pedidos': basedados.pedido_ler_todos(),
+        'mensagens': basedados.mensagem_ler_todas(),
+        'contactos': basedados.contacto_ler_todos(),
+        'artigos': basedados.artigo_ler_todos(apenas_publicados=False),
+    })
     return render(request, 'kikibyte/dashboard.html', context)
+
+
+def cliente_eliminar(request, cliente_id):
+    if request.method == 'POST':
+        basedados.cliente_eliminar(cliente_id)
+        messages.success(request, 'Cliente eliminado com sucesso.')
+    return redirect(reverse('kikibyte:dashboard') + '?tab=clientes')
+
+
+def documento_eliminar(request, documento_id):
+    if request.method == 'POST':
+        basedados.documento_eliminar(documento_id)
+        messages.success(request, 'Documento eliminado com sucesso.')
+    return redirect(reverse('kikibyte:dashboard') + '?tab=documentos')
