@@ -46,30 +46,59 @@ def artigo_detalhe(request, artigo_id):
 
 def documento_upload(request):
     clientes = basedados.cliente_ler_todos(apenas_ativos=False)
+    pedidos_abertos = basedados.pedido_ler_todos(estado='pendente') + \
+                      basedados.pedido_ler_todos(estado='em_execucao')
+
     if request.method == 'POST':
         titulo = request.POST.get('titulo', '').strip()
         tipo_documento = request.POST.get('tipo_documento', '').strip() or 'Documento'
         cliente_id = request.POST.get('cliente_id')
         visivel_cliente = request.POST.get('visivel_cliente') == 'on'
+        pedido_id = request.POST.get('pedido_id') or None
+        tempo_resolucao = request.POST.get('tempo_resolucao') or None
+        ficheiro = request.FILES.get('ficheiro')
 
         if not titulo or not cliente_id:
             messages.error(request, 'Preencha o título e escolha um cliente.')
         else:
+            if ficheiro:
+                import base64
+                ficheiro_base64 = base64.b64encode(ficheiro.read()).decode('utf-8')
+                mime_type = ficheiro.content_type
+                tamanho_bytes = ficheiro.size
+            else:
+                ficheiro_base64 = 'VGhpcyBpcyBhIGRlbW8gZG9jdW1lbnQgc3RyZWFtLg=='
+                mime_type = 'application/pdf'
+                tamanho_bytes = 1024
+
             basedados.documento_criar(
                 cliente_id=int(cliente_id),
                 titulo=titulo,
                 tipo_documento=tipo_documento,
-                ficheiro_base64='VGhpcyBpcyBhIGRlbW8gZG9jdW1lbnQgc3RyZWFtLg==',
-                mime_type='application/pdf',
-                tamanho_bytes=1024,
+                ficheiro_base64=ficheiro_base64,
+                mime_type=mime_type,
+                tamanho_bytes=tamanho_bytes,
+                pedido_id=int(pedido_id) if pedido_id else None,
                 visivel_cliente=visivel_cliente,
                 sensivel=False,
             )
+
+            # Se foi escolhido um pedido + tempo de resolução, marca como concluído
+            if pedido_id and tempo_resolucao:
+                basedados._query(
+                    """UPDATE pedido
+                       SET estado='concluido',
+                           data_fecho = data_criacao + (%s || ' hours')::interval
+                       WHERE id_pedido=%s""",
+                    [tempo_resolucao, pedido_id]
+                )
+
             messages.success(request, 'Documento criado com sucesso.')
             return redirect(reverse('kikibyte:dashboard') + '?tab=documentos')
 
     return render(request, 'kikibyte/documento_upload.html', {
         'clientes': clientes,
+        'pedidos_abertos': pedidos_abertos,
     })
 
 
@@ -79,14 +108,22 @@ def documento_download(request, documento_id):
         raise Http404('Documento não encontrado')
 
     import base64
+    import mimetypes
+
     content = documento.get('ficheiro_base64', '')
     try:
         body = base64.b64decode(content)
     except Exception:
         body = content.encode('utf-8')
 
-    nome_ficheiro = documento.get('titulo', 'documento').replace(' ', '_') + '.pdf'
-    response = HttpResponse(body, content_type='application/pdf')
+    mime_type = documento.get('mime_type') or 'application/octet-stream'
+    extensao = mimetypes.guess_extension(mime_type) or ''
+    if extensao == '.jpe':
+        extensao = '.jpg'
+
+    nome_ficheiro = documento.get('titulo', 'documento').replace(' ', '_') + extensao
+
+    response = HttpResponse(body, content_type=mime_type)
     response['Content-Disposition'] = f'attachment; filename="{nome_ficheiro}"'
     return response
 
@@ -96,8 +133,17 @@ def documento_visualizar(request, documento_id):
     if not documento:
         raise Http404('Documento não encontrado')
 
+    mime_type = documento.get('mime_type') or ''
+    if mime_type.startswith('image/'):
+        categoria = 'imagem'
+    elif mime_type == 'application/pdf':
+        categoria = 'pdf'
+    else:
+        categoria = 'outro'
+
     return render(request, 'kikibyte/documento_visualizar.html', {
         'documento': documento,
+        'categoria': categoria,
     })
 
 
@@ -281,7 +327,6 @@ def dashboard(request):
         'clientes': 'Clientes',
         'documentos': 'Documentos',
         'pedidos': 'Pedidos de Acesso',
-        'mensagens': 'Mensagens',
         'noticias': 'Notícias',
     }
     page_subtitles = {
@@ -289,7 +334,6 @@ def dashboard(request):
         'clientes': 'Gerencie a base de clientes e contacte as empresas registadas.',
         'documentos': 'Revise e organize todos os documentos carregados pelos clientes.',
         'pedidos': 'Acompanhe os pedidos de acesso e incidentes pendentes.',
-        'mensagens': 'Leia mensagens e contactos recebidos dos clientes.',
         'noticias': 'Gerencie os artigos e notícias do portal.',
     }
     page_icons = {
@@ -297,7 +341,6 @@ def dashboard(request):
         'clientes': '👥',
         'documentos': '📄',
         'pedidos': '📝',
-        'mensagens': '💬',
         'noticias': '📰',
     }
 
@@ -321,7 +364,6 @@ def dashboard(request):
         'clientes': clientes,
         'documentos': documentos,
         'pedidos': basedados.pedido_ler_todos(),
-        'mensagens': basedados.mensagem_ler_todas(),
         'contactos': basedados.contacto_ler_todos(),
         'artigos': basedados.artigo_ler_todos(apenas_publicados=False),
     })

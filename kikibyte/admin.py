@@ -2,7 +2,7 @@ from django.contrib import admin
 from .models import (
     Empresa, Role, Cliente, Utilizador, Pagina,
     CategoriaArtigo, Artigo, FormularioContacto,
-    Servico, Pedido, Mensagem, Documento,
+    Servico, Pedido, Documento,
     Relatorio, Notificacao, LogAtividade
 )
 

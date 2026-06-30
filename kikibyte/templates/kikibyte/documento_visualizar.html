@@ -14,6 +14,45 @@
         .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 14px 22px; border-radius: 16px; text-decoration: none; color: #fff; font-weight: 700; }
         .btn-primary { background: #793A14; }
         .btn-secondary { background: #f4e8df; color: #2e241b; border: 1px solid rgba(121,58,20,0.18); }
+
+        /* ── PRÉ-VISUALIZAÇÃO ── */
+        .preview-box {
+            margin: 20px 0;
+            border-radius: 20px;
+            overflow: hidden;
+            border: 1px solid #dfd2c3;
+            background: #fbf7f2;
+        }
+        .preview-box img {
+            display: block;
+            width: 100%;
+            max-height: 480px;
+            object-fit: contain;
+            background: #2e241b;
+        }
+        .preview-box iframe {
+            display: block;
+            width: 100%;
+            height: 560px;
+            border: none;
+        }
+        .preview-fallback {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            padding: 56px 24px;
+            color: #766456;
+            text-align: center;
+        }
+        .preview-fallback .icon {
+            width: 56px; height: 56px; border-radius: 16px;
+            background: #f4e8df; color: #793A14;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .preview-fallback .icon svg { width: 28px; height: 28px; }
+        .preview-fallback strong { color: #2e241b; }
     </style>
 </head>
 <body>
@@ -25,6 +64,26 @@
             <span>Data: {{ documento.created_at }}</span>
             <span>Visível ao cliente: {{ documento.visivel_cliente|yesno:'Sim,Não' }}</span>
         </div>
+
+        <div class="preview-box">
+            {% if categoria == 'imagem' %}
+                <img src="{% url 'kikibyte:documento_download' documento.id_documento %}" alt="{{ documento.titulo }}">
+            {% elif categoria == 'pdf' %}
+                <iframe src="{% url 'kikibyte:documento_download' documento.id_documento %}"></iframe>
+            {% else %}
+                <div class="preview-fallback">
+                    <div class="icon">
+                        <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                    </div>
+                    <strong>Pré-visualização não disponível</strong>
+                    <span>Este tipo de ficheiro não pode ser mostrado aqui. Descarregue para o abrir.</span>
+                </div>
+            {% endif %}
+        </div>
+
         <p>Este é o visualizador de documento. Pode descarregar ou voltar para a lista de documentos.</p>
         <div class="actions">
             <a href="{% url 'kikibyte:documento_download' documento.id_documento %}" class="btn btn-primary">Descarregar</a>

@@ -2,7 +2,7 @@
 basedados.py — Funções CRUD com SQL puro para o KikiByte
 Tabelas: empresa, role, cliente, utilizador, pagina,
          categoria_artigo, artigo, formulario_contacto,
-         servico, pedido, mensagem, documento, relatorio,
+         servico, pedido, documento, relatorio,
          notificacao, log_atividade
 """
 from django.db import connection
@@ -354,41 +354,7 @@ def pedido_eliminar(id_pedido):
     return _query("DELETE FROM pedido WHERE id_pedido=%s", [id_pedido])
 
 
-# ── MENSAGEM ─────────────────────────────────────────────────────────────────
-
-def mensagem_criar(pedido_id, mensagem, remetente_id=None,
-                   visivel_cliente=True, anexo_base64=None):
-    sql = """
-        INSERT INTO mensagem (pedido_id, mensagem, remetente_id,
-                              visivel_cliente, anexo_base64)
-        VALUES (%s,%s,%s,%s,%s)
-    """
-    return _query(sql, [pedido_id, mensagem, remetente_id,
-                        visivel_cliente, anexo_base64])
-
-def mensagem_ler_por_pedido(pedido_id, incluir_internas=False):
-    base = """
-        SELECT m.*, u.nome AS remetente_nome
-        FROM mensagem m
-        LEFT JOIN utilizador u ON m.remetente_id = u.id_utilizador
-        WHERE m.pedido_id=%s
-    """
-    if not incluir_internas:
-        base += " AND m.visivel_cliente=TRUE"
-    return _query(base + " ORDER BY m.created_at ASC", [pedido_id], fetchall=True)
-
-def mensagem_ler_todas():
-    sql = """
-        SELECT m.*, p.titulo AS pedido_titulo, u.nome AS remetente_nome
-        FROM mensagem m
-        LEFT JOIN pedido p ON m.pedido_id = p.id_pedido
-        LEFT JOIN utilizador u ON m.remetente_id = u.id_utilizador
-        ORDER BY m.created_at DESC
-    """
-    return _query(sql, fetchall=True)
-
-def mensagem_eliminar(id_mensagem):
-    return _query("DELETE FROM mensagem WHERE id_mensagem=%s", [id_mensagem])
+# ── DOCUMENTO ───────────────────────────────────────────────────────────────
 
 
 # ── DOCUMENTO ────────────────────────────────────────────────────────────────

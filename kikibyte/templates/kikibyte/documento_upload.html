@@ -15,21 +15,83 @@
         .btn { display: inline-flex; align-items: center; justify-content: center; gap: 10px; padding: 14px 22px; border-radius: 16px; text-decoration: none; color: #fff; font-weight: 700; }
         .btn-primary { background: #793A14; }
         .btn-secondary { background: #f4e8df; color: #2e241b; border: 1px solid rgba(121,58,20,0.18); }
-        .message { padding: 16px 18px; border-radius: 18px; background: #def7e1; color: #175f24; }
+
+        /* ── DRAG & DROP ── */
+        .dropzone {
+            border: 2px dashed #dfd2c3;
+            border-radius: 16px;
+            padding: 32px 16px;
+            text-align: center;
+            cursor: pointer;
+            background: #fbf7f2;
+            transition: border-color .2s, background .2s;
+        }
+        .dropzone:hover,
+        .dropzone.dragover {
+            border-color: #793A14;
+            background: #f4e8df;
+        }
+        .dropzone-icon {
+            width: 48px; height: 48px; border-radius: 50%;
+            background: #f4e8df;
+            display: flex; align-items: center; justify-content: center;
+            margin: 0 auto 12px; color: #793A14;
+        }
+        .dropzone-icon svg { width: 24px; height: 24px; }
+        .dropzone p.main { font-weight: 700; margin: 0 0 4px; font-size: .95rem; }
+        .dropzone p.main span { color: #793A14; text-decoration: underline; }
+        .dropzone small { color: #8a7a68; font-size: .8rem; font-weight: 400; }
+        .dropzone input[type="file"] { display: none; }
+
+        .file-preview {
+            display: none;
+            align-items: center; gap: 12px;
+            padding: 12px 14px; border-radius: 16px;
+            background: #f4e8df; border: 1px solid rgba(121,58,20,0.18);
+            margin-top: 12px;
+        }
+        .file-preview.show { display: flex; }
+        .file-preview-icon {
+            width: 38px; height: 38px; border-radius: 10px;
+            background: #793A14; color: #fff; flex-shrink: 0;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .file-preview-icon svg { width: 20px; height: 20px; }
+        .file-preview-info { flex: 1; min-width: 0; }
+        .file-preview-name {
+            font-size: .85rem; font-weight: 700;
+            white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+        }
+        .file-preview-size { font-size: .76rem; font-weight: 400; color: #8a7a68; }
+        .file-preview-remove {
+            background: none; border: none; cursor: pointer;
+            color: #8a7a68; padding: 6px; border-radius: 8px; flex-shrink: 0;
+            transition: background .2s, color .2s;
+        }
+        .file-preview-remove:hover { background: #fbdcdc; color: #a32d2d; }
+        .file-preview-remove svg { width: 16px; height: 16px; }
+
+        /* ── BLOCO RESOLUÇÃO ── */
+        .resolucao-box {
+            background: #fbf7f2;
+            border: 1px solid #dfd2c3;
+            border-radius: 18px;
+            padding: 18px 18px 4px;
+            display: grid; gap: 18px;
+        }
+        .resolucao-titulo {
+            font-weight: 700; font-size: .85rem; color: #793A14;
+            display: flex; align-items: center; gap: 6px; margin: 0;
+        }
+        .resolucao-titulo svg { width: 16px; height: 16px; }
     </style>
 </head>
 <body>
     <main class="page">
         <h1>Upload de Documento</h1>
         <p>Adicione um documento fictício para demonstração.</p>
-        {% if messages %}
-        <div class="message">
-            {% for message in messages %}
-                <div>{{ message }}</div>
-            {% endfor %}
-        </div>
-        {% endif %}
-        <form method="post">
+
+        <form method="post" enctype="multipart/form-data" id="docForm">
             {% csrf_token %}
             <label>
                 Título
@@ -48,15 +110,128 @@
                     {% endfor %}
                 </select>
             </label>
+
+            <label>
+                Ficheiro
+                <div class="dropzone" id="dropzone">
+                    <div class="dropzone-icon">
+                        <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                    </div>
+                    <p class="main">Arraste o ficheiro para aqui ou <span>clique para escolher</span></p>
+                    <small>PDF, Word, Excel ou imagem — máx. 10 MB</small>
+                    <input type="file" id="fileInput" name="ficheiro"
+                           accept=".pdf,.doc,.docx,.xls,.xlsx,.png,.jpg,.jpeg">
+                </div>
+                <div class="file-preview" id="filePreview">
+                    <div class="file-preview-icon">
+                        <svg fill="none" stroke="currentColor" stroke-width="1.5" viewBox="0 0 24 24">
+                            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                            <polyline points="14 2 14 8 20 8"/>
+                        </svg>
+                    </div>
+                    <div class="file-preview-info">
+                        <div class="file-preview-name" id="fileName"></div>
+                        <div class="file-preview-size" id="fileSize"></div>
+                    </div>
+                    <button type="button" class="file-preview-remove" id="fileRemove" aria-label="Remover">
+                        <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                    </button>
+                </div>
+            </label>
+
+            <div class="resolucao-box">
+                <p class="resolucao-titulo">
+                    <svg fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                    Associar a um Pedido (opcional)
+                </p>
+                <label>
+                    Pedido / Ticket
+                    <select name="pedido_id">
+                        <option value="">Nenhum — documento independente</option>
+                        {% for pedido in pedidos_abertos %}
+                            <option value="{{ pedido.id_pedido }}">{{ pedido.titulo }} — {{ pedido.cliente_nome }}</option>
+                        {% endfor %}
+                    </select>
+                </label>
+                <label>
+                    Tempo de Resolução
+                    <select name="tempo_resolucao">
+                        <option value="">Não aplicável</option>
+                        <option value="2">2 horas</option>
+                        <option value="4">4 horas</option>
+                        <option value="8">8 horas (1 dia útil)</option>
+                        <option value="24">24 horas</option>
+                        <option value="48">48 horas</option>
+                        <option value="168">1 semana</option>
+                    </select>
+                </label>
+            </div>
+
             <label>
                 Visível para Cliente
-                <input type="checkbox" name="visivel_cliente">
+                <input type="checkbox" name="visivel_cliente" style="width:auto">
             </label>
+
             <div class="actions">
                 <button type="submit" class="btn btn-primary">Guardar documento</button>
                 <a href="{% url 'kikibyte:dashboard' %}?tab=documentos" class="btn btn-secondary">Cancelar</a>
             </div>
         </form>
     </main>
+
+    <script>
+        const dropzone     = document.getElementById('dropzone');
+        const fileInput     = document.getElementById('fileInput');
+        const filePreview   = document.getElementById('filePreview');
+        const fileNameEl    = document.getElementById('fileName');
+        const fileSizeEl    = document.getElementById('fileSize');
+        const fileRemoveBtn = document.getElementById('fileRemove');
+
+        const MAX_SIZE = 10 * 1024 * 1024;
+
+        function formatBytes(b) {
+            if (b < 1024) return b + ' B';
+            if (b < 1024*1024) return (b/1024).toFixed(1) + ' KB';
+            return (b/(1024*1024)).toFixed(1) + ' MB';
+        }
+        function showFile(file) {
+            if (file.size > MAX_SIZE) { alert('Ficheiro excede 10 MB.'); clearFile(); return; }
+            fileNameEl.textContent = file.name;
+            fileSizeEl.textContent = formatBytes(file.size);
+            filePreview.classList.add('show');
+            dropzone.querySelector('.main').textContent = 'Ficheiro selecionado';
+        }
+        function clearFile() {
+            fileInput.value = '';
+            filePreview.classList.remove('show');
+            dropzone.querySelector('.main').innerHTML = 'Arraste o ficheiro para aqui ou <span>clique para escolher</span>';
+        }
+
+        dropzone.addEventListener('click', (e) => {
+            if (e.target.closest('.file-preview-remove')) return;
+            fileInput.click();
+        });
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length > 0) showFile(fileInput.files[0]);
+        });
+        ['dragenter','dragover'].forEach(evt => dropzone.addEventListener(evt, e => {
+            e.preventDefault(); e.stopPropagation(); dropzone.classList.add('dragover');
+        }));
+        ['dragleave','drop'].forEach(evt => dropzone.addEventListener(evt, e => {
+            e.preventDefault(); e.stopPropagation(); dropzone.classList.remove('dragover');
+        }));
+        dropzone.addEventListener('drop', (e) => {
+            const files = e.dataTransfer.files;
+            if (files.length > 0) { fileInput.files = files; showFile(files[0]); }
+        });
+        fileRemoveBtn.addEventListener('click', (e) => { e.stopPropagation(); clearFile(); });
+    </script>
 </body>
 </html>
